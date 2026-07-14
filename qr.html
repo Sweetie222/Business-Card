@@ -281,9 +281,10 @@ $("share").addEventListener("click", async () => {
   <div class="lp-stage">
     <div class="preview-wrap"><iframe id="preview"></iframe></div>
     <div class="bar">
-      <span class="hint">Download <b>index.html</b> → host it free (GitHub Pages) → point the QR (tab ②) at its URL.</span>
+      <span class="hint">Edit → <b>Publish</b> and it goes live automatically (no uploading). First time, you paste a GitHub token — saved on this device only.</span>
       <button class="ghost" id="dlVcf">Test vCard</button>
-      <button class="primary" id="download">⬇ Download index.html</button>
+      <button class="ghost" id="download">⬇ Download file</button>
+      <button class="primary" id="publish">🚀 Publish</button>
     </div>
   </div>
 </section>
@@ -520,6 +521,61 @@ $("share").addEventListener("click", async () => {
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(a.href), 1500);
     };
+
+    // ---- Publish: commit the page to GitHub automatically (no manual upload) ----
+    function fileNameFor(c) {
+      return (c.slug ? c.slug.replace(/[^a-z0-9_-]+/gi, "-").replace(/^-+|-+$/g, "") : "") || "index";
+    }
+    function repoInfo() {
+      const host = location.hostname;
+      if (!host.endsWith("github.io")) return null;
+      const repo = location.pathname.split("/").filter(Boolean)[0];
+      return repo ? { owner: host.split(".")[0], repo: repo } : null;
+    }
+    async function publish() {
+      const info = repoInfo();
+      if (!info) { alert("Auto-publish works when you open the studio from your GitHub Pages address (…github.io/…)."); return; }
+      const c = collect();
+      const id = (c.slug || c.org || "").trim();
+      if (!id) { alert("Give the card a name or link name first."); return; }
+      const path = fileNameFor(c) + ".html";
+
+      let token = localStorage.getItem("gh_token");
+      if (!token) {
+        token = prompt("One-time setup: paste your GitHub token.\nIt is saved only on this device.");
+        if (!token) return;
+        token = token.trim(); localStorage.setItem("gh_token", token);
+      }
+      const headers = { Authorization: "Bearer " + token, Accept: "application/vnd.github+json" };
+      const api = "https://api.github.com/repos/" + info.owner + "/" + info.repo + "/contents/" + path;
+
+      const btn = $("publish"); btn.disabled = true; btn.textContent = "Publishing…";
+      try {
+        let sha;
+        const g = await fetch(api + "?ref=main", { headers });
+        if (g.ok) sha = (await g.json()).sha;
+        const content = btoa(unescape(encodeURIComponent(buildHTML(c))));
+        const body = { message: "Publish " + path, content: content, branch: "main" };
+        if (sha) body.sha = sha;
+        const res = await fetch(api, { method: "PUT", headers: headers, body: JSON.stringify(body) });
+        if (res.ok) {
+          const store = loadStore(); store[id] = c; saveStore(store); currentId = id; refreshList();
+          const base = location.origin + location.pathname.replace(/[^/]*$/, "");
+          const url = base + (path === "index.html" ? "" : path);
+          alert("✅ Published!\n\nLive in ~1 minute at:\n" + url + "\n\nNow open the QR tab, pick this card, and download its QR.");
+        } else if (res.status === 401 || res.status === 403) {
+          localStorage.removeItem("gh_token");
+          alert("Token rejected. Click Publish again and paste a token with Contents: write access to this repo.");
+        } else {
+          alert("Publish failed (" + res.status + ").\n" + (await res.text()).slice(0, 200));
+        }
+      } catch (e) {
+        alert("Publish error: " + e.message);
+      } finally {
+        btn.disabled = false; btn.textContent = "🚀 Publish";
+      }
+    }
+    $("publish").onclick = publish;
 
     $("dlVcf").onclick = () => {
       const c = collect();
