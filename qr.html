@@ -419,7 +419,24 @@ $("share").addEventListener("click", async () => {
     function readLogo(file) {
       if (!file || !file.type.startsWith("image/")) return;
       const r = new FileReader();
-      r.onload = () => { logoData = r.result; showLogo(); render(); };
+      r.onload = () => {
+        // Shrink the image so it always fits in storage and keeps pages/QRs small.
+        const img = new Image();
+        img.onload = () => {
+          const max = 400;
+          let w = img.width, h = img.height;
+          if (w > max || h > max) { const k = max / Math.max(w, h); w = Math.round(w * k); h = Math.round(h * k); }
+          const cv = document.createElement("canvas");
+          cv.width = w; cv.height = h;
+          cv.getContext("2d").drawImage(img, 0, 0, w, h);
+          logoData = file.type === "image/svg+xml" ? r.result
+                   : file.type === "image/png" ? cv.toDataURL("image/png")
+                   : cv.toDataURL("image/jpeg", 0.85);
+          showLogo(); render();
+        };
+        img.onerror = () => { logoData = r.result; showLogo(); render(); };
+        img.src = r.result;
+      };
       r.readAsDataURL(file);
     }
     $("dzEmpty").addEventListener("click", () => $("logoFile").click());
@@ -523,7 +540,10 @@ $("share").addEventListener("click", async () => {
     // ---- multiple cards: save / load in this browser ----
     let currentId = "";
     function loadStore() { try { return JSON.parse(localStorage.getItem("bizcards") || "{}"); } catch (e) { return {}; } }
-    function saveStore(s) { localStorage.setItem("bizcards", JSON.stringify(s)); }
+    function saveStore(s) {
+      try { localStorage.setItem("bizcards", JSON.stringify(s)); return true; }
+      catch (e) { alert("Couldn't save — the image may be too large. Try a smaller logo."); return false; }
+    }
     function refreshList() {
       const store = loadStore();
       $("cardList").innerHTML = '<option value="">— Saved cards —</option>' +
@@ -548,7 +568,10 @@ $("share").addEventListener("click", async () => {
       const c = collect();
       const id = (c.slug || c.org || "").trim();
       if (!id) { alert("Give the card a name or link name first."); return; }
-      const store = loadStore(); store[id] = c; saveStore(store); currentId = id; refreshList();
+      const store = loadStore(); store[id] = c;
+      if (!saveStore(store)) return;
+      currentId = id; refreshList();
+      alert('Saved "' + id + '" — including the logo. It will still be here after a refresh.');
     };
     $("cardNew").onclick = () => { currentId = ""; applyCard({}); refreshList(); };
     $("cardDel").onclick = () => {
