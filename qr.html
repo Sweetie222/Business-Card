@@ -294,6 +294,9 @@ $("share").addEventListener("click", async () => {
     <h1>QR code</h1>
     <p class="sub">Free. Runs on your machine. No account.</p>
 
+    <label>Generate QR for</label>
+    <select id="qrCardPick"><option value="">— main page —</option></select>
+
     <label>Link the QR opens</label>
     <input type="text" id="data" value="https://yourname.github.io/card/" />
     <div class="sub" id="dataHint" style="margin-top:6px"></div>
@@ -562,13 +565,34 @@ $("share").addEventListener("click", async () => {
     const $ = id => document.getElementById(id);
     let logoData = "";
 
-    // When the studio itself is hosted, auto-point the QR at the contact page next to it.
-    if (location.protocol === "http:" || location.protocol === "https:") {
-      $("data").value = (location.origin + location.pathname).replace(/[^/]*$/, "");
-      $("dataHint").textContent = "Auto-filled to your main page. For an additional card, add its file name — e.g. …/Business-Card/card-2.html";
+    // Base URL = where this studio is hosted (each page lives next to it).
+    const qrBase = (location.protocol === "http:" || location.protocol === "https:")
+      ? (location.origin + location.pathname).replace(/[^/]*$/, "")
+      : "";
+    if (qrBase) {
+      $("data").value = qrBase;
+      $("dataHint").textContent = "Pick a saved card above and the QR targets that page automatically — or type any URL.";
     } else {
-      $("dataHint").textContent = "Tip: once hosted, open this studio from its web URL and this fills in automatically.";
+      $("dataHint").textContent = "Tip: once hosted, open this studio from its web URL and the links fill in automatically.";
     }
+
+    // Each saved card → its own page URL → its own QR, in one click.
+    function qrStore() { try { return JSON.parse(localStorage.getItem("bizcards") || "{}"); } catch (e) { return {}; } }
+    function slugFile(c) {
+      const s = ((c && c.slug) || "").replace(/[^a-z0-9_-]+/gi, "-").replace(/^-+|-+$/g, "");
+      return s ? s + ".html" : "";
+    }
+    function fillPicker() {
+      const store = qrStore();
+      $("qrCardPick").innerHTML = '<option value="">— main page —</option>' +
+        Object.keys(store).map(k => '<option>' + k + '</option>').join("");
+    }
+    $("qrCardPick").onchange = () => {
+      const store = qrStore(), id = $("qrCardPick").value;
+      if (qrBase) { $("data").value = qrBase + (id && store[id] ? slugFile(store[id]) : ""); refresh(); }
+    };
+    fillPicker();
+    document.querySelector('.tab[data-tab="qr"]').addEventListener("click", fillPicker);
 
     function opts() {
       return {
