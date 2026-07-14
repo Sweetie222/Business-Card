@@ -234,8 +234,8 @@ $("share").addEventListener("click", async () => {
       <legend>Basics</legend>
       <label>Name / Business</label>
       <input type="text" id="org" />
-      <label>Link name — used in the URL &amp; file (e.g. gaetan, husband, pcri; blank = main page)</label>
-      <input type="text" id="slug" placeholder="gaetan" />
+      <label>Link name — used in the page's URL &amp; file name (blank = main page)</label>
+      <input type="text" id="slug" placeholder="card-2" />
       <label>Header color</label>
       <input type="color" id="brand" />
       <label>Logo</label>
@@ -565,7 +565,7 @@ $("share").addEventListener("click", async () => {
     // When the studio itself is hosted, auto-point the QR at the contact page next to it.
     if (location.protocol === "http:" || location.protocol === "https:") {
       $("data").value = (location.origin + location.pathname).replace(/[^/]*$/, "");
-      $("dataHint").textContent = "Auto-filled to your main page. For one person's card, add its file — e.g. …/Business-Card/husband.html";
+      $("dataHint").textContent = "Auto-filled to your main page. For an additional card, add its file name — e.g. …/Business-Card/card-2.html";
     } else {
       $("dataHint").textContent = "Tip: once hosted, open this studio from its web URL and this fills in automatically.";
     }
