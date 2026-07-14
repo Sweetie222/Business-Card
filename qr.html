@@ -56,6 +56,10 @@
   .dz-filled { display: flex; align-items: center; gap: 12px; justify-content: center; }
   .dz-filled img { width: 56px; height: 56px; object-fit: contain; border-radius: 8px; background: #f1f5f9; padding: 4px; }
   .del-logo { border: 0; background: #fee2e2; color: #b91c1c; border-radius: 8px; padding: 8px 14px; cursor: pointer; font: inherit; font-weight: 600; }
+  .cards-bar { display: grid; grid-template-columns: 1fr auto auto auto; gap: 6px; margin-bottom: 16px; }
+  .cards-bar select { padding: 8px; }
+  .cards-bar button { border: 0; background: #e2e8f0; color: #0f172a; border-radius: 8px; padding: 8px 10px; cursor: pointer; font: inherit; font-weight: 600; white-space: nowrap; }
+  .cards-bar #cardSave { background: #0f172a; color: #fff; }
   .lp-stage { display: grid; grid-template-rows: 1fr auto; height: 100%; min-height: 0; }
   @media (max-width: 820px) { .lp-stage { height: auto; } }
   .preview-wrap { overflow: auto; display: grid; place-items: start center; padding: 26px; }
@@ -219,10 +223,19 @@ $("share").addEventListener("click", async () => {
     <h1>Landing page</h1>
     <p class="sub">What people see when they scan. Edit → preview → download.</p>
 
+    <div class="cards-bar">
+      <select id="cardList"><option value="">— Saved cards —</option></select>
+      <button id="cardNew" title="Start a blank card">＋ New</button>
+      <button id="cardSave" title="Save to this browser">💾 Save</button>
+      <button id="cardDel" title="Delete selected">🗑</button>
+    </div>
+
     <fieldset>
       <legend>Basics</legend>
       <label>Name / Business</label>
       <input type="text" id="org" />
+      <label>Link name — used in the URL &amp; file (e.g. gaetan, husband, pcri; blank = main page)</label>
+      <input type="text" id="slug" placeholder="gaetan" />
       <label>Header color</label>
       <input type="color" id="brand" />
       <label>Logo</label>
@@ -346,6 +359,7 @@ $("share").addEventListener("click", async () => {
     const DEFAULT = {
       org: "Pain Center of Rhode Island",
       brand: "#3b40a0",
+      slug: "",
       logo: "",
       phones: [ { number: "+1 4016486100", label: "Mobile" }, { number: "+1 4013723471", label: "Fax" } ],
       email: "info@paincenterofri.com",
@@ -357,6 +371,7 @@ $("share").addEventListener("click", async () => {
 
     $("org").value = DEFAULT.org;
     $("brand").value = DEFAULT.brand;
+    $("slug").value = DEFAULT.slug;
     $("email").value = DEFAULT.email;
     $("website").value = DEFAULT.website;
     $("addr").value = DEFAULT.address.lines.join("\n");
@@ -424,6 +439,7 @@ $("share").addEventListener("click", async () => {
       return {
         org: $("org").value.trim(),
         brand: $("brand").value,
+        slug: $("slug").value.trim(),
         logo: logoData,
         phones,
         email: $("email").value.trim(),
@@ -476,9 +492,11 @@ $("share").addEventListener("click", async () => {
     render();
 
     $("download").onclick = () => {
-      const blob = new Blob([buildHTML(collect())], { type: "text/html;charset=utf-8" });
+      const c = collect();
+      const name = (c.slug ? c.slug.replace(/[^a-z0-9_-]+/gi, "-").replace(/^-+|-+$/g, "") : "") || "index";
+      const blob = new Blob([buildHTML(c)], { type: "text/html;charset=utf-8" });
       const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob); a.download = "index.html";
+      a.href = URL.createObjectURL(blob); a.download = name + ".html";
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(a.href), 1500);
     };
@@ -498,6 +516,43 @@ $("share").addEventListener("click", async () => {
       a.href = URL.createObjectURL(blob); a.download = (c.org||"contact").replace(/\s+/g,"_") + ".vcf";
       document.body.appendChild(a); a.click(); a.remove();
     };
+
+    // ---- multiple cards: save / load in this browser ----
+    let currentId = "";
+    function loadStore() { try { return JSON.parse(localStorage.getItem("bizcards") || "{}"); } catch (e) { return {}; } }
+    function saveStore(s) { localStorage.setItem("bizcards", JSON.stringify(s)); }
+    function refreshList() {
+      const store = loadStore();
+      $("cardList").innerHTML = '<option value="">— Saved cards —</option>' +
+        Object.keys(store).map(k => '<option' + (k === currentId ? " selected" : "") + '>' + k + '</option>').join("");
+    }
+    function applyCard(c) {
+      c = c || {};
+      $("org").value = c.org || ""; $("brand").value = c.brand || "#3b40a0"; $("slug").value = c.slug || "";
+      $("email").value = c.email || ""; $("website").value = c.website || "";
+      $("addr").value = ((c.address && c.address.lines) || []).join("\n");
+      $("maps").value = (c.address && c.address.maps) || "";
+      $("phones").innerHTML = ""; (c.phones || []).forEach(p => $("phones").appendChild(phoneRow(p.number, p.label)));
+      $("socials").innerHTML = ""; (c.socials || []).forEach(s => $("socials").appendChild(socialRow(s.type, s.url)));
+      logoData = c.logo || ""; showLogo();
+      render();
+    }
+    $("cardList").onchange = () => {
+      const id = $("cardList").value, store = loadStore();
+      if (id && store[id]) { currentId = id; applyCard(store[id]); }
+    };
+    $("cardSave").onclick = () => {
+      const c = collect();
+      const id = (c.slug || c.org || "").trim();
+      if (!id) { alert("Give the card a name or link name first."); return; }
+      const store = loadStore(); store[id] = c; saveStore(store); currentId = id; refreshList();
+    };
+    $("cardNew").onclick = () => { currentId = ""; applyCard({}); refreshList(); };
+    $("cardDel").onclick = () => {
+      if (!currentId) { alert("Pick a saved card from the list to delete."); return; }
+      const store = loadStore(); delete store[currentId]; saveStore(store); currentId = ""; applyCard({}); refreshList();
+    };
+    refreshList();
   })();
 </script>
 
@@ -510,7 +565,7 @@ $("share").addEventListener("click", async () => {
     // When the studio itself is hosted, auto-point the QR at the contact page next to it.
     if (location.protocol === "http:" || location.protocol === "https:") {
       $("data").value = (location.origin + location.pathname).replace(/[^/]*$/, "");
-      $("dataHint").textContent = "Auto-filled to your hosted contact page. Change it only if the page lives elsewhere.";
+      $("dataHint").textContent = "Auto-filled to your main page. For one person's card, add its file — e.g. …/Business-Card/husband.html";
     } else {
       $("dataHint").textContent = "Tip: once hosted, open this studio from its web URL and this fills in automatically.";
     }
