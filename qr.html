@@ -114,6 +114,8 @@
   .btn { display: flex; align-items: center; justify-content: center; gap: 12px; background: #fff; border: 0; border-radius: 6px; cursor: pointer; padding: 20px; font: inherit; font-weight: 700; letter-spacing: .4px; color: #202124; box-shadow: 0 10px 24px rgba(0,0,0,.10); text-decoration: none; }
   .btn svg { width: 22px; height: 22px; }
   .btn:active { transform: translateY(1px); }
+  @keyframes splashPulse { 0%,100%{ transform: scale(1); opacity: 1 } 50%{ transform: scale(1.06); opacity: .85 } }
+  #splash > * { animation: splashPulse 1.4s ease-in-out infinite; }
 </style>
 <div class="wrap">
   <div class="header">
@@ -209,6 +211,18 @@ $("share").addEventListener("click", async () => {
   if (navigator.share) { try { await navigator.share(data); } catch(e){} }
   else { try { await navigator.clipboard.writeText(location.href); alert("Link copied!"); } catch(e){ prompt("Copy this link:", location.href); } }
 });
+
+// loading screen fade-out
+(function(){
+  var sp = document.getElementById("splash");
+  if (!sp) return;
+  var inIframe; try { inIframe = window.self !== window.top; } catch(e){ inIframe = true; }
+  if (inIframe) { if (sp.parentNode) sp.parentNode.removeChild(sp); return; }
+  var MIN = 1000, t0 = (window.performance && performance.now) ? performance.now() : 0;
+  function hide(){ sp.style.opacity = "0"; setTimeout(function(){ if (sp.parentNode) sp.parentNode.removeChild(sp); }, 550); }
+  function go(){ var e = ((window.performance && performance.now) ? performance.now() : 0) - t0; setTimeout(hide, Math.max(0, MIN - e)); }
+  if (document.readyState === "complete") go(); else window.addEventListener("load", go);
+})();
 </script></template>
 
 <!-- ══════════════════════════ TABS ══════════════════════════ -->
@@ -247,6 +261,23 @@ $("share").addEventListener("click", async () => {
           <button type="button" class="del-logo" id="logoRemove">Remove</button>
         </div>
       </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Loading screen</legend>
+      <label style="display:flex;align-items:center;gap:8px">
+        <input type="checkbox" id="splashOn" style="width:auto" /> Show a loading screen while the page opens
+      </label>
+      <label>Picture or logo to display while loading (blank = use your main logo)</label>
+      <div class="dropzone" id="splashDrop">
+        <input type="file" id="splashFile" accept="image/*" hidden />
+        <div class="dz-empty" id="splashEmpty">📷 Drag an image here, or <span class="link">browse</span></div>
+        <div class="dz-filled" id="splashFilled" hidden>
+          <img id="splashThumb" alt="loading preview" />
+          <button type="button" class="del-logo" id="splashRemove">Remove</button>
+        </div>
+      </div>
+      <button type="button" class="add" id="splashPreview">▶ Preview loading screen</button>
     </fieldset>
 
     <fieldset>
@@ -365,6 +396,8 @@ $("share").addEventListener("click", async () => {
       brand: "#3b40a0",
       slug: "",
       logo: "",
+      splashOn: true,
+      splash: "",
       phones: [ { number: "+1 4016486100", label: "Mobile" }, { number: "+1 4013723471", label: "Fax" } ],
       email: "info@paincenterofri.com",
       website: "paincenterofri.com",
@@ -376,6 +409,7 @@ $("share").addEventListener("click", async () => {
     $("org").value = DEFAULT.org;
     $("brand").value = DEFAULT.brand;
     $("slug").value = DEFAULT.slug;
+    $("splashOn").checked = DEFAULT.splashOn;
     $("email").value = DEFAULT.email;
     $("website").value = DEFAULT.website;
     $("addr").value = DEFAULT.address.lines.join("\n");
@@ -448,6 +482,48 @@ $("share").addEventListener("click", async () => {
     drop.addEventListener("drop", e => readLogo(e.dataTransfer.files[0]));
     showLogo();
 
+    // ---- loading screen image (drag & drop or browse) ----
+    let splashData = "";
+    const sdrop = $("splashDrop");
+    function showSplash() {
+      const has = !!splashData;
+      $("splashEmpty").hidden = has;
+      $("splashFilled").hidden = !has;
+      if (has) $("splashThumb").src = splashData;
+    }
+    function readSplash(file) {
+      if (!file || !file.type.startsWith("image/")) return;
+      const r = new FileReader();
+      r.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          const max = 400; let w = img.width, h = img.height;
+          if (w > max || h > max) { const k = max / Math.max(w, h); w = Math.round(w * k); h = Math.round(h * k); }
+          const cv = document.createElement("canvas"); cv.width = w; cv.height = h;
+          cv.getContext("2d").drawImage(img, 0, 0, w, h);
+          splashData = file.type === "image/svg+xml" ? r.result
+                     : file.type === "image/png" ? cv.toDataURL("image/png")
+                     : cv.toDataURL("image/jpeg", 0.85);
+          showSplash(); render();
+        };
+        img.onerror = () => { splashData = r.result; showSplash(); render(); };
+        img.src = r.result;
+      };
+      r.readAsDataURL(file);
+    }
+    $("splashEmpty").addEventListener("click", () => $("splashFile").click());
+    $("splashFile").addEventListener("change", e => readSplash(e.target.files[0]));
+    $("splashRemove").addEventListener("click", () => { splashData = ""; $("splashFile").value = ""; showSplash(); render(); });
+    ["dragenter", "dragover"].forEach(ev => sdrop.addEventListener(ev, e => { e.preventDefault(); sdrop.classList.add("drag"); }));
+    ["dragleave", "drop"].forEach(ev => sdrop.addEventListener(ev, e => { e.preventDefault(); sdrop.classList.remove("drag"); }));
+    sdrop.addEventListener("drop", e => readSplash(e.dataTransfer.files[0]));
+    $("splashOn").addEventListener("change", render);
+    $("splashPreview").onclick = () => {
+      const blob = new Blob([buildHTML(collect())], { type: "text/html;charset=utf-8" });
+      window.open(URL.createObjectURL(blob), "_blank");
+    };
+    showSplash();
+
     function collect() {
       const phones = [...$("phones").querySelectorAll(".repeat-row")]
         .map(r => ({ number: r.querySelector(".p-num").value.trim(), label: r.querySelector(".p-label").value.trim() }))
@@ -462,6 +538,8 @@ $("share").addEventListener("click", async () => {
         brand: $("brand").value,
         slug: $("slug").value.trim(),
         logo: logoData,
+        splashOn: $("splashOn").checked,
+        splash: splashData,
         phones,
         email: $("email").value.trim(),
         website: $("website").value.trim(),
@@ -501,7 +579,15 @@ $("share").addEventListener("click", async () => {
         "<body>",
       ].join("\n");
       const body = TEMPLATE.replace("__CARD_JSON__", JSON.stringify(card, null, 2));
-      return head + "\n" + body + "\n</body>\n</html>\n";
+      let splashHtml = "";
+      if (card.splashOn) {
+        const simg = card.splash || card.logo || "";
+        const inner = simg
+          ? '<img src="' + simg + '" alt="" style="width:150px;height:150px;object-fit:contain;border-radius:24px;background:#fff;padding:16px">'
+          : '<div style="color:#fff;font-size:56px;font-weight:800;letter-spacing:2px;font-family:Arial,sans-serif">' + esc((card.org || "").split(/\s+/).map(w => w[0] || "").join("").slice(0, 3).toUpperCase()) + '</div>';
+        splashHtml = '<div id="splash" style="position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:' + (card.brand || "#3b40a0") + ';transition:opacity .5s ease">' + inner + '</div>\n';
+      }
+      return head + "\n" + splashHtml + body + "\n</body>\n</html>\n";
     }
 
     let t;
@@ -614,6 +700,8 @@ $("share").addEventListener("click", async () => {
       $("phones").innerHTML = ""; (c.phones || []).forEach(p => $("phones").appendChild(phoneRow(p.number, p.label)));
       $("socials").innerHTML = ""; (c.socials || []).forEach(s => $("socials").appendChild(socialRow(s.type, s.url)));
       logoData = c.logo || ""; showLogo();
+      $("splashOn").checked = c.splashOn !== false;
+      splashData = c.splash || ""; showSplash();
       render();
     }
     $("cardList").onchange = () => {
