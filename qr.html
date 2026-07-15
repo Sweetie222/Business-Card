@@ -392,17 +392,17 @@ $("share").addEventListener("click", async () => {
     const $ = id => document.getElementById(id);
 
     const DEFAULT = {
-      org: "Pain Center of Rhode Island",
+      org: "",
       brand: "#3b40a0",
       slug: "",
       logo: "",
       splashOn: true,
       splash: "",
-      phones: [ { number: "+1 4016486100", label: "Mobile" }, { number: "+1 4013723471", label: "Fax" } ],
-      email: "info@paincenterofri.com",
-      website: "paincenterofri.com",
-      address: { lines: ["Reservoir Avenue 1150", "Cranston, RI 02920", "United States"], maps: "Reservoir Avenue 1150, Cranston, RI 02920" },
-      socials: [ { type: "instagram", url: "https://instagram.com/" }, { type: "facebook", url: "https://facebook.com/" }, { type: "google", url: "https://google.com/" } ],
+      phones: [],
+      email: "",
+      website: "",
+      address: null,
+      socials: [],
     };
     const SOCIAL_TYPES = ["instagram","facebook","google","twitter","linkedin","youtube","tiktok","whatsapp","website"];
 
@@ -412,8 +412,8 @@ $("share").addEventListener("click", async () => {
     $("splashOn").checked = DEFAULT.splashOn;
     $("email").value = DEFAULT.email;
     $("website").value = DEFAULT.website;
-    $("addr").value = DEFAULT.address.lines.join("\n");
-    $("maps").value = DEFAULT.address.maps;
+    $("addr").value = DEFAULT.address ? DEFAULT.address.lines.join("\n") : "";
+    $("maps").value = DEFAULT.address ? DEFAULT.address.maps : "";
 
     function phoneRow(number = "", label = "") {
       const d = document.createElement("div");
